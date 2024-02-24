@@ -5,7 +5,6 @@ const { expressjwt: expressJwt } = require("express-jwt");
 require('dotenv').config("../.env")
 const fs = require("fs")
 const formidable = require('formidable');
-const Lawyer = require("../../lawyerModel");
 const nodemailer = require("nodemailer");
 const shortId = require('shortid');
 
