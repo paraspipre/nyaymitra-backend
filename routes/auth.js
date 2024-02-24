@@ -1,10 +1,15 @@
-const { lawyerLogin, lawyerRegister, getAllLawyers } = require("../controllers/lawyerController");
+// const { lawyerLogin, lawyerRegister, getAllLawyers } = require("../../lawyerController");
 const {
    userRegister,
    userLogin,
    logOut,
    getAllUsers,
    connectLawyer,
+   userSignup,
+   preSignup,
+   signout,
+   signin,
+   signup,
    // like,
    // superlike,
    // block,
@@ -16,11 +21,10 @@ const router = require("express").Router();
 
 
 
-router.post("/user/login", userLogin);
-router.post("/user/register", userRegister);
-router.post("/lawyer/login", lawyerLogin);
-router.post("/lawyer/register", lawyerRegister);
-router.get("/logout/:id", logOut);
+router.post("/signin", signin);
+router.post("/signup", preSignup);
+router.post("/activate", signup)
+router.get("/logout", signout);
 
 
 // router.get('/image/:name', photo);
