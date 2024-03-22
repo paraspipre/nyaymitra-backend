@@ -1,17 +1,13 @@
 const mongoose = require("mongoose");
-
+const { ObjectId } = mongoose.Schema
 const RequestSchema = mongoose.Schema(
    {
-      sub: { type: String },
-      desc: { type: String },
-      fir: {
-         data: Buffer,
-         contentType: String
-      },
-      users: [{
+      subject: { type: String },
+      description: { type: String },
+      receiver: {
          type: ObjectId,
          ref: 'User'
-      }],
+      },
       sender: {
          type: ObjectId,
          ref: 'User'
@@ -22,4 +18,4 @@ const RequestSchema = mongoose.Schema(
    }
 );
 
-module.exports = mongoose.model("Messages", RequestSchema);
+module.exports = mongoose.model("Request", RequestSchema);

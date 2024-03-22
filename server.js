@@ -3,7 +3,6 @@ const morgan = require('morgan')
 const cors = require("cors");
 const http = require("http");
 const cookieParser = require('cookie-parser')
-const bodyParser = require('body-parser');
 const mongoose = require("mongoose");
 const socket = require("socket.io");
 require("dotenv").config();
@@ -27,16 +26,8 @@ const app = express();
 app.use(cors({ origin: '*' }));
 app.use(morgan('dev'))
 app.use(express.json());
+app.use(express.urlencoded({extended:true}));
 app.use(cookieParser())
-
-app.use(bodyParser.json());
-app.use(
-   bodyParser.urlencoded({
-      extended: true,
-   }),
-);
-
-
 
 //database
 mongoose.set("strictQuery", false)
@@ -58,60 +49,79 @@ app.use("/api/lawyer", lawyerRoutes)
 app.use("/api/messages", messagesRoutes)
 app.use("/api/post", postRoutes)
 
-
-
 const server = http.createServer(app);
 const io = socket(server, {
-   cors: {
-      origin: "*"
-   },
+   cors: true
 });
-
-
-// const peerServer = ExpressPeerServer(server, {
-//    debug: true,
-// });
-// app.use('/peerjs', peerServer);
 
 global.onlineUsers = []
 global.onlineVideoUsers = []
 
-const addNewUser = (username, socketId) => {
-   !onlineUsers.some((user) => user.username === username) &&
-      onlineUsers.push({ username, socketId })
+const addNewUser = (id, socketId) => {
+   !onlineUsers.some((user) => user.id === id) &&
+      onlineUsers.push({ id, socketId })
 }
 
 const removeUser = (socketId) => {
    onlineUsers = onlineUsers.filter((user) => user.socketId !== socketId)
 }
 
-const getUser = (username) => {
-   return onlineUsers.find((user) => user.username === username)
-}
-
-const addNewVideoUser = (currentUser, id) => {
-   !onlineVideoUsers.some((user) => user.currentUser === currentUser) &&
-      onlineVideoUsers.push({ currentUser, id })
-}
-
-const removeVideoUser = (id) => {
-   onlineVideoUsers = onlineVideoUsers.filter((user) => user.id !== id)
-}
-
-const getVideoUser = (currentUser) => {
-   return onlineVideoUsers.find((user) => user.currentUser === currentUser)
+const getUser = (id) => {
+   return onlineUsers.find((user) => user.id === id)
 }
 
 
 io.on("connection", (socket) => {
    console.log("user connnected", socket.id)
-
-   socket.on("newUser", (username) => {
-      addNewUser(username, socket.id)
-   })
    
-   console.log(onlineUsers, "onlineUser")
-   console.log(onlineVideoUsers, "onlineVideoUser")
+   socket.on("newUser", (id) => {
+      addNewUser(id, socket.id)
+      console.log(onlineUsers, "onlineUser")
+   })
+   // console.log(onlineVideoUsers, "onlineVideoUser")
+   
+   // socket.on("room:join", (data) => {
+   //    const { email, room } = data;
+   //    emailToSocketIdMap.set(email, socket.id);
+   //    socketidToEmailMap.set(socket.id, email);
+   //    io.to(room).emit("user:joined", { email, id: socket.id });
+   //    socket.join(room);
+   //    io.to(socket.id).emit("room:join", data);
+   // });
+
+   socket.on("request", ({ to, from,message }) => {
+      const receiver = getUser(to);
+      console.log(receiver,message)
+      io.to(receiver?.socketId).emit("incomming:request", { from, message });
+   });
+
+   socket.on("accept", ({ to, from, message }) => {
+      const receiver = getUser(to);
+      io.to(receiver?.socketId).emit("incomming:accept", { from, message });
+   });
+
+   socket.on("user:call", ({ to, offer, from }) => {
+      const receiver = getUser(to);
+      console.log(receiver,"recieerc",to)
+      io.to(receiver?.socketId).emit("incomming:call", { from, offer });
+   });
+
+   socket.on("call:accepted", ({ to, ans, from }) => {
+      const receiver = getUser(to);
+      io.to(receiver?.socketId).emit("call:accepted", { from, ans });
+   });
+
+   socket.on("peer:nego:needed", ({ to, offer, from }) => {
+      console.log("peer:nego:needed", );
+      const receiver = getUser(to);
+      io.to(receiver?.socketId).emit("peer:nego:needed", { from, offer });
+   });
+
+   socket.on("peer:nego:done", ({ to, ans, from }) => {
+      console.log("peer:nego:done", );
+      const receiver = getUser(to);
+      io.to(receiver?.socketId).emit("peer:nego:final", { from, ans });
+   });
 
 
    socket.on("send-msg", ({ to, from, message }) => {

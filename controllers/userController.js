@@ -7,6 +7,11 @@ const fs = require("fs")
 const formidable = require('formidable');
 const nodemailer = require("nodemailer");
 const shortId = require('shortid');
+const Request = require("../models/RequestModel")
+const { asyncHandler } = require("../utils/asyncHandler.js");
+const { uploadOnCloudinary } = require("../utils/cloudinary.js");
+const { ApiResponse } = require("../utils/ApiResponse.js");
+const { ApiError } = require("../utils/ApiError.js");
 
 const transporter = nodemailer.createTransport({
    service: 'gmail',
@@ -29,10 +34,10 @@ exports.preSignup = async (req, res) => {
       if (user) {
          return res.status(400).send('Email is taken');
       }
-      const data = { name, email:email.toLowerCase(), password, role, regno, phone, date }
+      const data = { name, email: email.toLowerCase(), password, role, regno, phone, date }
       const token = jwt.sign(data, process.env.JWT_ACCOUNT_ACTIVATION, { expiresIn: '10m' });
 
-   
+
       const emailData = {
          from: process.env.EMAIL_FROM,
          to: email,
@@ -91,7 +96,7 @@ exports.signup = (req, res) => {
                const token = jwt.sign({ _id: user._id }, process.env.secret);
                res.cookie("token", token)
                return res.json({
-                  user: { id: user._id, name, email, username, role },
+                  user: { _id, name, email, username, role },
                   token,
                   message: 'Singup success! Please signin'
                });
@@ -118,9 +123,9 @@ module.exports.signin = async (req, res, next) => {
       if (!isMatch) return res.status(400).send("Email or password is incorrect");
 
       const token = jwt.sign({ _id: user._id }, process.env.secret);
-      const { name, username, role } = user
+      const { name, username, role, _id } = user
       res.cookie("token", token)
-      res.json({ token, user: { id: user._id, name, email, username, role } })
+      res.json({ token, user: { _id, name, email, username, role } })
 
    } catch (err) {
       res.status(400).send(err.message);
@@ -137,12 +142,13 @@ exports.signout = (req, res) => {
 
 
 exports.requireSignin = expressJwt({
-   secret: "process.env.secret", algorithms: ['RS256']
+   secret: process.env.secret, algorithms: ['HS256']
 })
 
 exports.authMiddleware = (req, res, next) => {
-   const authUserId = req.user._id
-   User.findById({ _id: authUserId }).exec((err, user) => {
+   const authUserId = req?.auth?._id
+   console.log(authUserId)
+   User.findById({ _id: authUserId }).then((user, err) => {
       if (err || !user) {
          return res.status(400).send('User not found')
       }
@@ -170,56 +176,85 @@ module.exports.getAllUsers = async (req, res, next) => {
 
 module.exports.sendRequest = async (req, res) => {
    try {
-      let form = new formidable.IncomingForm();
-      form.keepExtensions = true;
-      form.parse(req, async (err, fields, files) => {
-         const { sub, desc ,user ,lawyer } = fields;
-         const userdata = await User.findById(user._id)
-         if (userdata) {
-            const lawyerdata = await Lawyer.findById(lawyer._id)
-            if (lawyerdata) {
-
-               if (files.fir) {
-                  
-               }
-               lawyerdata.users.push(user._id)
-               user.lawyers.push(lawyer._id);
-               lawyerdata.save()
-               user.save()
-               return res.json(user)
-            }
-      }})
-
+      const user = req.profile
+      const { sub, desc, lawyer } = req.body;
+      console.log(lawyer, "ssdfsd")
+      const request = await Request.create({ subject: sub, description: desc, receiver: lawyer, sender: user._id })
+      const lawyerdata = await User.findByIdAndUpdate(lawyer, { $push: { requests: request._id } },{new:true})
+      return res.json({ message: "requst sent", lawyerdata })
    } catch (err) {
       res.status(400).send(err.message);
    }
 }
 
-module.exports.connectLawyer = async (req, res, next) => {
+module.exports.acceptRequest = async (req, res) => {
    try {
-      const { userID, id } = req.body;
-      console.log(userID, id, "id")
-      const user = await User.findById(userID)
-      if (user) {
-         const lawyerdata = await Lawyer.findById(id)
-         if (lawyerdata) {
-            lawyerdata.users.push(userID)
-            lawyerdata.save()
-            user.lawyers.push(id);
-            user.save()
-            return res.json(user)
-         }
-      }
-
+      const lawyerdata = req.profile
+      const { userid, reqid } = req.body
+      const reqdata = await Request.findByIdAndDelete(reqid)
+      const user = await User.findByIdAndUpdate(userid, { $push: { connections: lawyerdata._id } },{new:true})
+      const lawyer = await User.findByIdAndUpdate(lawyerdata._id, { $push: { connections: userid },$pull:{requests:reqid} }, { new: true })
+      return res.json({ message: "requst accepted" ,user,lawyer})
+         
    } catch (err) {
       res.status(400).send(err.message);
    }
 }
+
+module.exports.updateUserAvatar = asyncHandler(async (req, res) => {
+   const avatarLocalPath = req.file?.path
+   console.log(avatarLocalPath, "fsfs")
+
+   if (!avatarLocalPath) {
+      throw new ApiError(400, "Avatar file is missing")
+   }
+
+   //TODO: delete old image - assignment
+
+   const avatar = await uploadOnCloudinary(avatarLocalPath)
+
+   if (!avatar.url) {
+      throw new ApiError(400, "Error while uploading on avatar")
+
+   }
+
+   const user = await User.findByIdAndUpdate(
+      req.profile?._id,
+      {
+         $set: {
+            image: avatar.url
+         }
+      },
+      { new: true }
+   ).select("-hashedpassword")
+
+   return res
+      .status(200)
+      .json(
+         new ApiResponse(200, user, "Avatar image updated successfully")
+      )
+})
+
+
+module.exports.getConnections = async (req, res, next) => {
+   try {
+      const user = await User.findById(req.profile._id).populate("connections")
+
+      if (!user) {
+         return res.status(404).json({
+            err: "user not found"
+         })
+      }
+      return res.json({connections: user.connections});
+
+   } catch (err) {
+      res.status(400).send(err.message);
+   }
+};
 
 module.exports.getUser = async (req, res, next) => {
    try {
-      const loggeduserID = req.params.id;
-      const user = await User.findById(loggeduserID)
+      const user = await User.findById(req.profile._id)
 
       if (!user) {
          return res.status(404).json({
@@ -233,46 +268,62 @@ module.exports.getUser = async (req, res, next) => {
    }
 };
 
-module.exports.like = async (req, res) => {
+module.exports.getRequests = async (req, res, next) => {
    try {
-      const { userId, likedUserId } = req.body;
-      const user = await User.findOne({ email: userId });
-      const likedUser = await User.findOne({ email: likedUserId });
-      user.likes.push(likedUserId);
-      await user.save();
+      const requests = await Request.find({receiver : req.profile._id}).populate("sender")
 
-      res.send("Image liked!");
-   } catch (err) {
-      res.status(400).send(err.message);
-   }
-}
+      if (!requests) {
+         return res.status(404).json({
+            err: "request not found"
+         })
+      }
+      return res.json(requests);
 
-
-module.exports.superlike = async (req, res, next) => {
-   try {
-      const { userId, superlikedUserId } = req.body;
-      const user = await User.findOne({ email: userId });
-      const superlikedUser = await User.findOne({ email: superlikedUserId });
-      user.superlikes.push(superlikedUserId);
-      await user.save();
-
-      res.send("Image superliked!");
    } catch (err) {
       res.status(400).send(err.message);
    }
 };
 
-module.exports.block = async (req, res, next) => {
-   try {
-      const { userId, blockedUserId } = req.body;
-      const user = await User.findOne({ email: blockedUserId });
-      user.blockedUsers.push(userId);
-      await user.save();
-      res.send("User blocked!");
-   } catch (err) {
-      res.status(400).send(err.message);
-   }
-};
+// module.exports.like = async (req, res) => {
+//    try {
+//       const { userId, likedUserId } = req.body;
+//       const user = await User.findOne({ email: userId });
+//       const likedUser = await User.findOne({ email: likedUserId });
+//       user.likes.push(likedUserId);
+//       await user.save();
+
+//       res.send("Image liked!");
+//    } catch (err) {
+//       res.status(400).send(err.message);
+//    }
+// }
+
+
+// module.exports.superlike = async (req, res, next) => {
+//    try {
+//       const { userId, superlikedUserId } = req.body;
+//       const user = await User.findOne({ email: userId });
+//       const superlikedUser = await User.findOne({ email: superlikedUserId });
+//       user.superlikes.push(superlikedUserId);
+//       await user.save();
+
+//       res.send("Image superliked!");
+//    } catch (err) {
+//       res.status(400).send(err.message);
+//    }
+// };
+
+// module.exports.block = async (req, res, next) => {
+//    try {
+//       const { userId, blockedUserId } = req.body;
+//       const user = await User.findOne({ email: blockedUserId });
+//       user.blockedUsers.push(userId);
+//       await user.save();
+//       res.send("User blocked!");
+//    } catch (err) {
+//       res.status(400).send(err.message);
+//    }
+// };
 
 module.exports.logOut = (req, res, next) => {
    try {

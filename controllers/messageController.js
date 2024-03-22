@@ -1,22 +1,21 @@
 const Messages = require("../models/messageModel");
 const formidable = require('formidable');
 const fs = require('fs')
+
 module.exports.getMessages = async (req, res, next) => {
   try {
-    const { from, to } = req.body;
+    const { currentChatId } = req.body;
 
     const messages = await Messages.find({
       users: {
-        $all: [from, to],
+        $all: [currentChatId, req.profile._id],
       },
     }).sort({ updatedAt: 1 });
 
     const projectedMessages = messages.map((msg) => {
       return {
-        fromSelf: msg.sender.toString() === from,
-        message: msg.message.text,
-        file: msg.message.file,
-        type: msg.message.filetype,
+        fromSelf: msg.sender === req.profile._id,
+        message: msg.message.text
       };
     });
     res.json(projectedMessages);
@@ -27,11 +26,10 @@ module.exports.getMessages = async (req, res, next) => {
 
 module.exports.addMessage = async (req, res, next) => {
   try {
-    const { from, to, message, file, type } = req.body
+    const { to, message } = req.body
+    const from = req.profile._id
     const data = new Messages()
     data.message.text = message
-    data.message.file = file
-    data.message.filetype = type
     data.users = [from, to],
       data.sender = from,
       data.save()

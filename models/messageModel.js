@@ -1,18 +1,23 @@
 const mongoose = require("mongoose");
-
+const { ObjectId } = mongoose.Schema
 const MessageSchema = mongoose.Schema(
   {
     message: {
       text: { type: String },
       file: {
         type: String
-      },
-      filetype: String
+      }
     },
-    users: Array,
+    users: [
+      {
+        type: ObjectId,
+        ref: 'User'
+      }
+    ],
     sender: {
-      type: String,
-      required: true,
+      type: ObjectId,
+      ref: 'User',
+      required:true
     },
   },
   {
@@ -20,4 +25,4 @@ const MessageSchema = mongoose.Schema(
   }
 );
 
-module.exports = mongoose.model("Messages", MessageSchema);
+module.exports = mongoose.model("Message", MessageSchema);

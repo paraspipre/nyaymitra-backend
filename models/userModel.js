@@ -1,6 +1,6 @@
 const mongoose = require("mongoose");
 const { isEmail } = require('validator')
-
+const { ObjectId } = mongoose.Schema
 const userSchema = new mongoose.Schema({
 
    //common
@@ -26,11 +26,10 @@ const userSchema = new mongoose.Schema({
    },
    hashed_password: {
       type: String,
-      required:true,
+      required: true,
    },
    image: {
-      data: Buffer,
-      contentType: String
+      type: String
    },
    role: Number,
    phone: {
@@ -43,11 +42,15 @@ const userSchema = new mongoose.Schema({
       // smin: [1000, 'Bio must be greater than 100 words'],
    },
    chatbot: Array,
+   connections: [{
+      type: ObjectId,
+      ref: "User"
+   }],
 
-   //user
-   lawyers: Array,
-
-   //lawyer
+   requests: [{
+      type: ObjectId,
+      ref: "Request"
+   }],
    regno: {
       type: String,
       unique: true,
@@ -55,8 +58,7 @@ const userSchema = new mongoose.Schema({
    },
    fields: Array,
    tags: Array,
-   users: Array,
-});
+}, { timestamps: true });
 
 
-module.exports = mongoose.model("Users", userSchema);
+module.exports = mongoose.model("User", userSchema);
