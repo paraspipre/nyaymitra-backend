@@ -8,7 +8,6 @@ const userSchema = new mongoose.Schema({
       type: String,
       required: [true, 'Please enter name'],
       min: 3,
-      max: 20,
    },
    email: {
       type: String,
@@ -26,7 +25,6 @@ const userSchema = new mongoose.Schema({
    },
    hashed_password: {
       type: String,
-      required: true,
    },
    image: {
       type: String
@@ -46,7 +44,6 @@ const userSchema = new mongoose.Schema({
       type: ObjectId,
       ref: "User"
    }],
-
    requests: [{
       type: ObjectId,
       ref: "Request"
@@ -56,8 +53,17 @@ const userSchema = new mongoose.Schema({
       unique: true,
       max: 50,
    },
-   fields: Array,
-   tags: Array,
+   specialization: [
+      {
+         type:String
+      }
+   ],
+   address: {
+      type:String
+   },
+   tags: {
+      type: String
+   }
 }, { timestamps: true });
 
 

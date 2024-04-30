@@ -78,7 +78,7 @@ io.on("connection", (socket) => {
       addNewUser(id, socket.id)
       console.log(onlineUsers, "onlineUser")
    })
-   // console.log(onlineVideoUsers, "onlineVideoUser")
+   console.log(onlineVideoUsers, "onlineVideoUser")
    
    // socket.on("room:join", (data) => {
    //    const { email, room } = data;
@@ -102,7 +102,7 @@ io.on("connection", (socket) => {
 
    socket.on("user:call", ({ to, offer, from }) => {
       const receiver = getUser(to);
-      console.log(receiver,"recieerc",to)
+      console.log(receiver,"recieerc",to, offer)
       io.to(receiver?.socketId).emit("incomming:call", { from, offer });
    });
 

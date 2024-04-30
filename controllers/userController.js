@@ -112,6 +112,42 @@ exports.signup = (req, res) => {
    }
 };
 
+module.exports.altsignup = async (req, res) => {
+   try { 
+      const { name, email, password, role, regno, phone, date , specialization,address,tags } = req.body;
+      const userexist = await User.findOne({ email: email.toLowerCase() })
+      if (userexist) {
+         return res.status(400).send('Email is taken');
+      }
+      let username = email.split("@")[0];
+
+      const salt = await bcrypt.genSalt(10)
+
+      const hashed_password = await bcrypt.hash(password, salt)
+
+      let user
+      if (role === 0) {
+         user = new User({ name, email, hashed_password, username, role });
+      } else {
+         user = new User({ name, email, hashed_password, username, role, regno, phone, date, specialization, address,tags });
+      }
+      user.save().then((user, err) => {
+         if (err) {
+            console.log(err)
+            return res.status(401).send(err.message)
+         }
+         const token = jwt.sign({ _id: user._id }, process.env.secret);
+         res.cookie("token", token)
+         return res.status(200).json({
+            user: { _id: user._id, name, email, username, role },
+            token,
+            message: 'Singup success! Please signin'
+         });
+      })
+   } catch (err) {
+      console.log(err)
+   }
+}
 
 module.exports.signin = async (req, res, next) => {
    try {
