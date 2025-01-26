@@ -12,7 +12,105 @@ const { asyncHandler } = require("../utils/asyncHandler.js");
 const { uploadOnCloudinary } = require("../utils/cloudinary.js");
 const { ApiResponse } = require("../utils/ApiResponse.js");
 const { ApiError } = require("../utils/ApiError.js");
+const { AIMessage, Chat } = require("../models/chat.model.js");
 
+module.exports.createChat = asyncHandler(async (req, res) => {
+   console.log("create")
+   const userdata = await User.findById(req.profile._id)
+   console.log(userdata)
+   const chat = await Chat.create({ title: `Chat ${Number(userdata?.chatHistory?.length) + 1}` })
+   const user = await User.findByIdAndUpdate(req.profile._id, { $push: { chatHistory: chat?._id } })
+
+   return res
+      .status(200)
+      .json(
+         new ApiResponse(
+            200,
+            user.chatHistory,
+            "chat created fetched successfully"
+         )
+      )
+})
+
+module.exports.updateChat = asyncHandler(async (req, res) => {
+   const { chatid } = req.params
+   const { user, ai } = req.body
+   const msg = await AIMessage.create({
+      user,
+      ai
+   })
+   const chat = await Chat.findByIdAndUpdate(chatid, { $push: { messages: msg?._id } })
+
+   return res
+      .status(200)
+      .json(
+         new ApiResponse(
+            200,
+            chat,
+            "chat updated successfully"
+         )
+      )
+})
+
+module.exports.updateChatTitle = asyncHandler(async (req, res) => {
+   const { chatid } = req.params
+   const { title } = req.body
+   const chat = await Chat.findByIdAndUpdate(chatid, { $set: { title } })
+
+   return res
+      .status(200)
+      .json(
+         new ApiResponse(
+            200,
+            chat,
+            "chat title updated successfully"
+         )
+      )
+})
+
+module.exports.getChat = asyncHandler(async (req, res) => {
+   const { chatid } = req.params
+   const chat = await Chat.findById(chatid).populate({ path: "messages", select: { user: 1, ai: 1, _id: 0 }, options: { sort: { createdAt: 1 } } })
+   return res
+      .status(200)
+      .json(
+         new ApiResponse(
+            200,
+            chat,
+            "chat history fetched successfully"
+         )
+      )
+})
+
+module.exports.deleteChat = asyncHandler(async (req, res) => {
+   const { chatid } = req.params
+   const user = await User.findByIdAndUpdate(req.profile._id, { $pull: { chatHistory: chatid } })
+   const chat = await Chat.findByIdAndDelete(chatid)
+
+   return res
+      .status(200)
+      .json(
+         new ApiResponse(
+            200,
+            chat,
+            "chat deleted successfully"
+         )
+      )
+})
+
+module.exports.getChatHistory = asyncHandler(async (req, res) => {
+   const user = await User.findById(req.profile._id).populate("chatHistory").sort({ updatedAt: 1 })
+
+   return res
+      .status(200)
+      .json(
+         new ApiResponse(
+            200,
+            user.chatHistory,
+            "chat history fetched successfully"
+         )
+      )
+})
 const transporter = nodemailer.createTransport({
    service: 'gmail',
    host: "smtp.gmail.com",
@@ -44,10 +142,9 @@ exports.preSignup = async (req, res) => {
          subject: `Account activation link`,
          html: `
             <p>Please use the following link to activate your acccount:</p>
-            <p>${process.env.CLIENT_URL}/auth/account/activate/${token}</p>
+            <a href="${process.env.CLIENT_URL}/auth/account/activate/${token}">Activate</a>
             <hr />
-            <p>This email may contain sensetive information</p>
-            <p>https://nyaymitra-rho.vercel.app</p>
+            <p>https://nyaymitra.paraspipre.com</p>
         `
       };
 
@@ -74,7 +171,7 @@ exports.signup = (req, res) => {
                return res.status(401).send('Expired link. Signup again');
             }
 
-            const { name, email, password, role, regno, phone, date } = jwt.decode(activatetoken);
+            let { name, email, password, role, regno, phone, date } = jwt.decode(activatetoken);
 
             let username = email.split("@")[0];
 
@@ -82,9 +179,15 @@ exports.signup = (req, res) => {
 
             const hashed_password = await bcrypt.hash(password, salt)
 
+            const existinguser = await User.findOne({ email: email.toLowerCase() })
+            if (existinguser) return res.json({
+               message: 'Account Already Activated'
+            });
+
             let user
             if (role === 0) {
-               user = new User({ name, email, hashed_password, username, role });
+               phone = 0
+               user = new User({ name, email, hashed_password, username, role,phone });
             } else {
                user = new User({ name, email, hashed_password, username, role, regno, phone, date });
             }
@@ -96,7 +199,7 @@ exports.signup = (req, res) => {
                const token = jwt.sign({ _id: user._id }, process.env.secret);
                res.cookie("token", token)
                return res.json({
-                  user: { _id, name, email, username, role },
+                  user: { _id: user._id, name, email, username, role },
                   token,
                   message: 'Singup success! Please signin'
                });
@@ -175,6 +278,46 @@ exports.signout = (req, res) => {
    })
 }
 
+module.exports.updateUser = asyncHandler(async (req, res) => {
+   const { name, password, date, phone, bio, field, tag } = req.body;
+
+   let hashedPassword;
+   if (password) {
+      const salt = await bcrypt.genSalt(10);
+      hashedPassword = await bcrypt.hash(password, salt);
+   }
+
+   const existingUser = await User.findById(req.profile?._id);
+   if (!existingUser) {
+      return res.status(404).json(new ApiResponse(404, null, "User not found"));
+   }
+
+   const updatedData = {
+      name: name || existingUser.name,
+      hashed_password: hashedPassword || existingUser.hashed_password,
+      date: date || existingUser.date,
+      phone: phone || existingUser.phone,
+   };
+
+   if (existingUser?.role !== 0) {
+      updatedData.bio = bio || existingUser.bio;
+      updatedData.field = field || existingUser.field;
+      updatedData.tag = tag || existingUser.tag;
+   }
+
+   const updatedUser = await User.findByIdAndUpdate(
+      req.profile?._id,
+      { $set: updatedData },
+      { new: true }
+   ).select("-hashed_password");
+
+   if (!updatedUser) {
+      return res.status(500).json(new ApiResponse(500, null, "Failed to update user"));
+   }
+
+   return res.status(200).json(new ApiResponse(200, updatedUser, "User updated successfully"));
+
+})
 
 
 exports.requireSignin = expressJwt({
@@ -182,6 +325,7 @@ exports.requireSignin = expressJwt({
 })
 
 exports.authMiddleware = (req, res, next) => {
+   console.log("userauth")
    const authUserId = req?.auth?._id
    console.log(authUserId)
    User.findById({ _id: authUserId }).then((user, err) => {
@@ -195,16 +339,17 @@ exports.authMiddleware = (req, res, next) => {
 
 module.exports.getAllUsers = async (req, res, next) => {
    try {
-      User.find().then((users, err) => {
-         if (err || !users) {
-            console.log(err)
-            return res.status(400).send(err.message)
-         }
-         return res.json(users);
-      }).catch((err) => {
-         console.log(err)
-      })
+      const page = parseInt(req.query.page) || 1; 
+      const limit = parseInt(req.query.limit) || 10; 
+      const role = parseInt(req.query.role) || 1; 
+      const search = parseInt(req.query.search); 
+      const skip = (page - 1) * limit;
+      const query = {};
+      if (role) query.role = role;
+      if (search) query.name = { $regex: search, $options: "i" };
 
+      const users = await User.find(query).skip(skip).limit(limit);      
+      return res.json(users);
    } catch (err) {
       res.status(400).send(err.message);
    }
@@ -274,7 +419,7 @@ module.exports.updateUserAvatar = asyncHandler(async (req, res) => {
 
 module.exports.getConnections = async (req, res, next) => {
    try {
-      const user = await User.findById(req.profile._id).populate("connections")
+      const user = await User.findById(req.profile._id).populate("connections","_id name image")
 
       if (!user) {
          return res.status(404).json({

@@ -7,7 +7,6 @@ const mongoose = require("mongoose");
 const socket = require("socket.io");
 require("dotenv").config();
 
-
 //models
 const User = require("./models/userModel")
 
@@ -23,7 +22,9 @@ const { ExpressPeerServer } = require("peer");
 const app = express();
 
 //
-app.use(cors({ origin: '*' }));
+app.use(cors({
+   origin: "*",
+}))
 app.use(morgan('dev'))
 app.use(express.json());
 app.use(express.urlencoded({extended:true}));

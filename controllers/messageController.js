@@ -2,6 +2,8 @@ const Messages = require("../models/messageModel");
 const formidable = require('formidable');
 const fs = require('fs')
 
+const { uploadOnCloudinary } = require("../utils/cloudinary.js");
+
 module.exports.getMessages = async (req, res, next) => {
   try {
     const { currentChatId } = req.body;
@@ -14,7 +16,7 @@ module.exports.getMessages = async (req, res, next) => {
 
     const projectedMessages = messages.map((msg) => {
       return {
-        fromSelf: msg.sender === req.profile._id,
+        fromSelf: msg.sender.toString() === req.profile._id.toString(),
         message: msg.message.text
       };
     });
@@ -42,3 +44,5 @@ module.exports.addMessage = async (req, res, next) => {
     next(ex);
   }
 };
+
+

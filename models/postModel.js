@@ -1,4 +1,5 @@
 const mongoose = require("mongoose");
+const { ObjectId } = mongoose.Schema
 
 const PostSchema = mongoose.Schema(
    {
@@ -7,30 +8,29 @@ const PostSchema = mongoose.Schema(
          required: true
       },
       author: {
-         type: String,
-         required: true
+         type: ObjectId,
+         ref: 'User'
       },
       desc: {
          type: String,
       },
       image: {
-         data: Buffer,
-         contentType: String
+         type: String
       },
       vote: {
          type: Number
-      },
-      comment: {
-         author: {
-            type: String,
-         },
-         text: {
-            type: String,
-         },
-         vote: {
-            type: Number
-         },
       }
+      // comment: {
+      //    author: {
+      //       type: String,
+      //    },
+      //    text: {
+      //       type: String,
+      //    },
+      //    vote: {
+      //       type: Number
+      //    },
+      // }
    },
    {
       timestamps: true,

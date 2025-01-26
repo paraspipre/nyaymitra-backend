@@ -1,91 +1,53 @@
 const fs = require("fs")
 const Post = require("../models/postModel")
 const formidable = require('formidable');
+const { asyncHandler } = require("../utils/asyncHandler");
+const { uploadOnCloudinary } = require("../utils/cloudinary");
+const { ApiResponse } = require("../utils/ApiResponse");
+const { ApiError } = require("../utils/ApiError");
 
 
-module.exports.createPost = async (req, res, next) => {
-   console.log("clicked")
-   try {
-      let form = new formidable.IncomingForm();
-      form.keepExtensions = true;
+module.exports.createPost = asyncHandler(async (req, res) => {
+   const imageLocalPath = req.file?.path
+   console.log(imageLocalPath, "fsfs")
 
-
-      form.parse(req, async (err, fields, files) => {
-         const { author, title, desc } = fields
-         const post = new Post()
-         post.title = title?.[0]
-         post.author = author?.[0]
-         post.desc = desc?.[0]
-
-         if (files.image?.[0]) {
-            if (files.image[0].size > 10000000) {
-               return res.status(400).json({
-                  error: 'Image should be less then 1mb in size'
-               });
-            }
-            post.image.data = fs.readFileSync(files.image[0].filepath);
-            post.image.contentType = files.image[0].mimetype;
-         }
-         post.save()
-
-
-         res.json(post)
-      })
-   } catch (err) {
-      console.log(err);
+   if (!imageLocalPath) {
+      throw new ApiError(400, "Image file is missing")
    }
-};
+
+   const image = await uploadOnCloudinary(imageLocalPath)
+
+   if (!image.url) {
+      throw new ApiError(400, "Error while uploading on image")
+
+   }
+   const { title, desc } = req.body
+
+   const post = new Post()
+   post.title = title
+   post.author = req?.profile?._id
+   post.desc = desc
+   post.image = image.url
+   await post.save()
+   
+
+   return res
+      .status(200)
+      .json(
+         new ApiResponse(200, post, "Post created successfully")
+      )
+})
+
 
 module.exports.getAllPosts = async (req, res, next) => {
    try {
 
-      Post.find().then((posts, err) => {
-         if (err || !posts) {
-            console.log(err)
-            return res.status(400).json({
-               err
-            })
-         }
-         return res.json(posts);
-      }).catch((err) => {
-         console.log(err)
-      })
-
+      const posts = await Post.find()
+         .sort({ createdAt: -1 }) 
+         .populate("author", "name image") 
+         .exec()
+      return res.status(200).json(posts);
    } catch (err) {
-      console.log(err);
+      return res.status(500).json({ success: false, error: "Server Error" });
    }
-};
-
-module.exports.getPost = (req, res, next) => {
-   try {
-      const id = req.params.id;
-      Post.findById(id).then((err, post) => {
-         if (err || !post) {
-            console.log(err)
-            return res.status(404).json({
-               err: "user not found"
-            })
-         }
-         return res.json(post);
-      }).catch((err) => {
-         console.log(err)
-      })
-   } catch (err) {
-      console.log(err);
-   }
-};
-
-module.exports.photo = (req, res) => {
-   const id = req.params.id
-   Post.findById(id)
-      .select('image')
-      .then((post, err) => {
-         if (err || !post) {
-            return res.status(400).json({
-               err
-            });
-         }
-         res.set('Content-Type', post.image.contentType)
-         res.send(post.image.data)
-      });
 };

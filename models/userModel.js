@@ -11,8 +11,6 @@ const userSchema = new mongoose.Schema({
    },
    email: {
       type: String,
-      required: [true, 'Please enter email'],
-      unique: true,
       max: 50,
       validate: [isEmail, 'Please enter a valid email']
    },
@@ -31,27 +29,33 @@ const userSchema = new mongoose.Schema({
    },
    role: Number,
    phone: {
-      type: Number,
-      unique: true,
+      type: Number
    },
    date: Date,
-   bio: {
-      type: String,
-      // smin: [1000, 'Bio must be greater than 100 words'],
-   },
-   chatbot: Array,
+   chatHistory: [
+      {
+         type: mongoose.Schema.Types.ObjectId,
+         ref: "Chat"
+      }
+   ],
    connections: [{
       type: ObjectId,
       ref: "User"
    }],
+
+   //lawyer
    requests: [{
       type: ObjectId,
       ref: "Request"
    }],
    regno: {
       type: String,
-      unique: true,
+      default:"MPf0239/30",
       max: 50,
+   },
+   bio: {
+      type: String,
+      // smin: [1000, 'Bio must be greater than 100 words'],
    },
    specialization: [
       {
